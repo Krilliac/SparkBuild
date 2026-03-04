@@ -2,10 +2,10 @@ name: Build SparkBuild
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, Master, 'claude/**' ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, Master ]
 
 jobs:
   build:
@@ -45,3 +45,31 @@ jobs:
         with:
           files: release/**/SparkBuild.exe
           generate_release_notes: true
+
+  # Rolling "latest" release on every push to Master
+  release-latest:
+    needs: build
+    if: github.ref == 'refs/heads/Master' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SparkBuild-Release
+          path: release/
+
+      - name: Update latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: SparkBuild (Latest Build)
+          body: |
+            Automatically built from the latest commit on Master.
+            This release is updated on every push. Use a versioned tag
+            (e.g. v1.0.0) if you need a stable reference.
+          prerelease: true
+          make_latest: false
+          files: release/**/SparkBuild.exe
