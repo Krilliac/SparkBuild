@@ -2,6 +2,7 @@
 #include <winhttp.h>
 #include <shlobj.h>
 #include <shlwapi.h>
+#include <shldisp.h>
 #include <fstream>
 #include <filesystem>
 
