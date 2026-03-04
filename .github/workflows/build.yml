@@ -2,7 +2,7 @@ name: Build SparkBuild
 
 on:
   push:
-    branches: [ main, master, 'claude/**' ]
+    branches: [ main, master ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, master ]
@@ -18,49 +18,13 @@ jobs:
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 
       - name: Build
-        id: build
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          $output = cmake --build build --config Release --parallel 2>&1 | Out-String
-          $output | Out-File -FilePath build_output.txt -Encoding utf8
-          Write-Host $output
-          if ($LASTEXITCODE -ne 0) {
-            $lines = $output -split "`n"
-            $errors = $lines | Where-Object { $_ -match ": error " -or $_ -match "fatal error" -or $_ -match "^LINK :" }
-            foreach ($err in $errors) {
-              $clean = $err.Trim() -replace '%', '%25' -replace "`n", '%0A' -replace "`r", ''
-              Write-Host "::error::$clean"
-            }
-            exit 1
-          }
-
-      - name: Show error annotations
-        if: steps.build.outcome == 'failure'
-        shell: pwsh
-        run: |
-          $content = Get-Content build_output.txt -Raw -ErrorAction SilentlyContinue
-          $lines = $content -split "`n"
-          $errors = $lines | Where-Object { $_ -match ": error " -or $_ -match "fatal error" -or $_ -match "^LINK :" -or $_ -match "unresolved external" }
-          $errMsg = ($errors | Select-Object -First 20) -join "`n"
-          Write-Host "::error title=Build Errors::$($errMsg -replace '%','%25' -replace "`n",'%0A' -replace "`r",'')"
-
-      - name: Find and list exe
-        if: steps.build.outcome == 'success'
-        shell: pwsh
-        run: |
-          Get-ChildItem -Path build -Recurse -Filter "SparkBuild.exe" | ForEach-Object { Write-Host $_.FullName }
+        run: cmake --build build --config Release --parallel
 
       - name: Upload artifact
-        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: SparkBuild-Release
           path: build/**/SparkBuild.exe
-
-      - name: Fail on build error
-        if: steps.build.outcome == 'failure'
-        run: exit 1
 
   release:
     needs: build
