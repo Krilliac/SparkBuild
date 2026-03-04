@@ -1,5 +1,7 @@
 #include "Downloader.h"
 #include <winhttp.h>
+#include <ole2.h>
+#include <oleauto.h>
 #include <shlobj.h>
 #include <shlwapi.h>
 #include <shldisp.h>
@@ -10,6 +12,8 @@
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "oleaut32.lib")
+#pragma comment(lib, "uuid.lib")
 
 namespace SparkBuild {
 

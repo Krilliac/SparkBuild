@@ -40,6 +40,8 @@ if(WIN32)
         shlwapi       # Shell lightweight utility functions
         shell32       # Shell API (folder dialogs, ZIP extraction)
         ole32         # COM runtime
+        oleaut32      # OLE Automation (VARIANT, SysAllocString)
+        uuid          # COM GUIDs (CLSID_Shell, IID_IShellDispatch)
         comdlg32      # Common dialogs
     )
 endif()
