@@ -21,15 +21,28 @@ jobs:
         id: build
         continue-on-error: true
         shell: cmd
-        run: cmake --build build --config Release --parallel 2>&1
-
-      - name: Show errors on failure
-        if: steps.build.outcome == 'failure'
-        shell: cmd
         run: |
-          echo === REBUILDING WITH VERBOSE FOR ERROR CAPTURE ===
-          cmake --build build --config Release -- /verbosity:minimal 2>&1
-          echo === BUILD FAILED ===
+          cmake --build build --config Release --parallel > build_output.txt 2>&1
+          type build_output.txt
+
+      - name: Write error summary
+        if: always()
+        shell: pwsh
+        run: |
+          $content = Get-Content build_output.txt -Raw -ErrorAction SilentlyContinue
+          if ($content) {
+            $lines = $content -split "`n"
+            $errors = $lines | Where-Object { $_ -match "error " -or $_ -match "fatal " -or $_ -match "LINK :" -or $_ -match ": error" }
+            Write-Host "=== BUILD ERRORS ==="
+            $errors | ForEach-Object { Write-Host $_ }
+            Write-Host "=== END ERRORS ==="
+            Write-Host ""
+            Write-Host "=== LAST 50 LINES ==="
+            $lines | Select-Object -Last 50 | ForEach-Object { Write-Host $_ }
+            Write-Host "=== END ==="
+            $errorText = ($errors -join "`n")
+            "``````" + "`n" + $errorText + "`n" + "``````" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY
+          }
 
       - name: Upload exe on success
         if: steps.build.outcome == 'success'
