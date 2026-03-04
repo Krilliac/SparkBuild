@@ -2,6 +2,7 @@
 #include "ProcessRunner.h"
 #include "Downloader.h"
 #include "Config.h"
+#include <shlobj.h>
 #include <thread>
 #include <sstream>
 #include <filesystem>
