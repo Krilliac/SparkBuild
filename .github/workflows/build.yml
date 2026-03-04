@@ -18,18 +18,37 @@ jobs:
         run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 
       - name: Build
-        run: cmake --build build --config Release --parallel
+        id: build
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $output = cmake --build build --config Release --parallel 2>&1 | Out-String
+          $output | Out-File -FilePath build_output.txt
+          Write-Host $output
+          if ($LASTEXITCODE -ne 0) {
+            $lines = $output -split "`n"
+            $errors = $lines | Where-Object { $_ -match "error " -or $_ -match ": error" -or $_ -match "fatal error" -or $_ -match "LINK :" }
+            $errorSummary = "## Build Errors`n``````n" + ($errors -join "`n") + "`n```"
+            $errorSummary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY
+            exit 1
+          }
 
       - name: Find and list exe
+        if: steps.build.outcome == 'success'
         shell: pwsh
         run: |
           Get-ChildItem -Path build -Recurse -Filter "SparkBuild.exe" | ForEach-Object { Write-Host $_.FullName }
 
       - name: Upload artifact
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: SparkBuild-Release
           path: build/**/SparkBuild.exe
+
+      - name: Fail on build error
+        if: steps.build.outcome == 'failure'
+        run: exit 1
 
   release:
     needs: build
