@@ -23,15 +23,27 @@ jobs:
         shell: pwsh
         run: |
           $output = cmake --build build --config Release --parallel 2>&1 | Out-String
-          $output | Out-File -FilePath build_output.txt
+          $output | Out-File -FilePath build_output.txt -Encoding utf8
           Write-Host $output
           if ($LASTEXITCODE -ne 0) {
             $lines = $output -split "`n"
-            $errors = $lines | Where-Object { $_ -match "error " -or $_ -match ": error" -or $_ -match "fatal error" -or $_ -match "LINK :" }
-            $errorSummary = "## Build Errors`n``````n" + ($errors -join "`n") + "`n```"
-            $errorSummary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY
+            $errors = $lines | Where-Object { $_ -match ": error " -or $_ -match "fatal error" -or $_ -match "^LINK :" }
+            foreach ($err in $errors) {
+              $clean = $err.Trim() -replace '%', '%25' -replace "`n", '%0A' -replace "`r", ''
+              Write-Host "::error::$clean"
+            }
             exit 1
           }
+
+      - name: Show error annotations
+        if: steps.build.outcome == 'failure'
+        shell: pwsh
+        run: |
+          $content = Get-Content build_output.txt -Raw -ErrorAction SilentlyContinue
+          $lines = $content -split "`n"
+          $errors = $lines | Where-Object { $_ -match ": error " -or $_ -match "fatal error" -or $_ -match "^LINK :" -or $_ -match "unresolved external" }
+          $errMsg = ($errors | Select-Object -First 20) -join "`n"
+          Write-Host "::error title=Build Errors::$($errMsg -replace '%','%25' -replace "`n",'%0A' -replace "`r",'')"
 
       - name: Find and list exe
         if: steps.build.outcome == 'success'
