@@ -8,9 +8,8 @@ on:
     branches: [ main, master, Master ]
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -23,42 +22,103 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SparkBuild-Release
+          name: SparkBuild-Windows
           path: build/**/SparkBuild.exe
 
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build curl unzip
+
+      - name: Set compiler (GCC)
+        if: matrix.compiler == 'gcc'
+        run: |
+          echo "CC=gcc" >> $GITHUB_ENV
+          echo "CXX=g++" >> $GITHUB_ENV
+
+      - name: Set compiler (Clang)
+        if: matrix.compiler == 'clang'
+        run: |
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+
+      - name: Configure CMake
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Verify binary
+        run: ./build/bin/SparkBuild --version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SparkBuild-Linux-${{ matrix.compiler }}
+          path: build/bin/SparkBuild
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install cmake ninja
+
+      - name: Configure CMake
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Verify binary
+        run: ./build/bin/SparkBuild --version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SparkBuild-macOS
+          path: build/bin/SparkBuild
+
   release:
-    needs: build
+    needs: [build-windows, build-linux, build-macos]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Download Release artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: SparkBuild-Release
           path: release/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/**/SparkBuild.exe
+          files: release/**/*
           generate_release_notes: true
 
-  # Rolling "latest" release on every push to Master
+  # Rolling "latest" release on every push to main branch
   release-latest:
-    needs: build
+    needs: [build-windows, build-linux, build-macos]
     if: github.ref == 'refs/heads/Master' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Download Release artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: SparkBuild-Release
           path: release/
 
       - name: Update latest release
@@ -67,9 +127,10 @@ jobs:
           tag_name: latest
           name: SparkBuild (Latest Build)
           body: |
-            Automatically built from the latest commit on Master.
+            Automatically built from the latest commit.
+            Cross-platform builds: Windows, Linux (GCC + Clang), macOS.
             This release is updated on every push. Use a versioned tag
-            (e.g. v1.0.0) if you need a stable reference.
+            (e.g. v2.0.0) if you need a stable reference.
           prerelease: true
           make_latest: false
-          files: release/**/SparkBuild.exe
+          files: release/**/*

@@ -1,9 +1,6 @@
 #pragma once
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
+#include "Platform.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -14,6 +11,7 @@ namespace SparkBuild {
 enum class OptionCategory {
     Core,
     Graphics,
+    Audio,
     EditorTools,
     Scripting,
     Gameplay,
@@ -23,7 +21,7 @@ enum class OptionCategory {
 struct BuildOption {
     std::string cmakeVar;       // e.g. "ENABLE_GRAPHICS"
     std::string displayName;    // e.g. "Graphics Engine"
-    std::string description;    // Tooltip text
+    std::string description;    // Description text
     bool defaultValue;
     bool currentValue;
     OptionCategory category;
@@ -32,14 +30,17 @@ struct BuildOption {
 enum class BuildType {
     Debug,
     Release,
-    RelWithDebInfo
+    RelWithDebInfo,
+    MinSizeRel
 };
 
 enum class Generator {
     VS2022,
     VS2026,
     Ninja,
-    UnixMakefiles
+    NinjaMultiConfig,
+    UnixMakefiles,
+    Xcode
 };
 
 struct BuildConfig {
@@ -49,9 +50,10 @@ struct BuildConfig {
     std::string cmakePath;      // Path to cmake executable (empty = use PATH)
 
     // Build settings
-    Generator generator = Generator::VS2022;
+    Generator generator = Generator::Ninja;
     BuildType buildType = BuildType::Release;
-    std::string msvcToolset;    // e.g. "v143", "v144"
+    std::string msvcToolset;    // e.g. "v143", "v144" (Windows only)
+    std::string cmakePreset;    // CMake preset name (empty = manual config)
 
     // All build options
     std::vector<BuildOption> options;
@@ -65,6 +67,12 @@ const char* GeneratorToString(Generator gen);
 const char* GeneratorDisplayName(Generator gen);
 const char* BuildTypeToString(BuildType bt);
 const char* CategoryDisplayName(OptionCategory cat);
+
+// Get available generators for the current platform
+std::vector<Generator> GetAvailableGenerators();
+
+// Get the default generator for the current platform
+Generator GetDefaultGenerator();
 
 class ConfigManager {
 public:
@@ -82,14 +90,18 @@ public:
     void ApplyPresetAllOff();
     void ApplyPresetDefaults();
     void ApplyPresetMinimal();
+    void ApplyPresetLinuxFriendly();
 
     // Build the cmake configure command line
     std::string BuildCMakeConfigureCommand() const;
     // Build the cmake build command line
     std::string BuildCMakeBuildCommand() const;
 
-    // Get path to the INI file (next to the exe)
+    // Get path to the INI file (next to the exe or in home dir)
     static std::string GetDefaultIniPath();
+
+    // Detect available CMake presets from engine directory
+    std::vector<std::string> DetectCMakePresets() const;
 
     BuildConfig config;
 };

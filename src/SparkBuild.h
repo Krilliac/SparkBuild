@@ -1,64 +1,65 @@
 #pragma once
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#include <commctrl.h>
-#include <memory>
+#include "Platform.h"
+#include "Config.h"
+#include "ProcessRunner.h"
 #include <string>
+#include <memory>
 
 namespace SparkBuild {
 
-class ConfigManager;
-class ProcessRunner;
-class EnvironmentTab;
-class ConfigureTab;
-class BuildTab;
-
 class SparkBuildApp {
 public:
-    SparkBuildApp(HINSTANCE hInst);
+    SparkBuildApp();
     ~SparkBuildApp();
 
-    // Initialize and show the main window. Returns false on failure.
-    bool Init();
-
-    // Run the message loop. Returns the exit code.
+    // Run the interactive TUI application
     int Run();
 
-    static LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
 private:
-    void OnCreate(HWND hwnd);
-    void OnSize(int width, int height);
-    void OnTabChanged();
-    void OnClose();
-    void UpdateStatusBar(const std::string& text);
+    // Main menu
+    void ShowMainMenu();
 
-    // Calculate the display area below the tab control header
-    RECT GetTabDisplayArea() const;
+    // Environment checks
+    void ShowEnvironmentMenu();
+    void CheckAll();
+    void CheckGit();
+    void CheckCMake();
+    void CheckCompilers();
+    void CheckSubmodules();
+    void CheckEngineRepo();
+    void CloneEngine();
+    void DownloadCMake();
+    void InitSubmodules();
 
-    HINSTANCE m_hInst;
-    HWND m_hwnd = nullptr;          // Main window
-    HWND m_hTab = nullptr;          // Tab control
-    HWND m_hStatusBar = nullptr;    // Status bar
+    // Configuration
+    void ShowConfigureMenu();
+    void ShowGeneratorMenu();
+    void ShowBuildTypeMenu();
+    void ShowOptionsMenu();
+    void ShowPresetsMenu();
+    void SetEnginePath();
+    void SetBuildPath();
+    void ShowCMakePresetsMenu();
 
-    // Tab pages
-    std::unique_ptr<EnvironmentTab> m_envTab;
-    std::unique_ptr<ConfigureTab> m_cfgTab;
-    std::unique_ptr<BuildTab> m_buildTab;
+    // Build
+    void ShowBuildMenu();
+    void GenerateProject();
+    void BuildProject();
+    void GenerateAndBuild();
+    void CleanBuild();
+    void OpenBuildFolder();
+    void RunEngine();
 
-    // Shared modules
-    std::unique_ptr<ConfigManager> m_config;
-    std::unique_ptr<ProcessRunner> m_processRunner;
+    // Show current config summary
+    void ShowConfigSummary();
 
-    int m_currentTab = 0;
+    // Platform-specific helpers
+    void ShowPackageHints(const std::string& package);
 
-    static constexpr int IDC_TABCTRL   = 2001;
-    static constexpr int IDC_STATUSBAR = 2002;
-    static constexpr int WINDOW_WIDTH  = 950;
-    static constexpr int WINDOW_HEIGHT = 680;
+    ConfigManager m_config;
+    ProcessRunner m_processRunner;
+    bool m_running = true;
 };
 
 } // namespace SparkBuild
