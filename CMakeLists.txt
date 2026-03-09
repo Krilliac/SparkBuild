@@ -4,61 +4,63 @@ project(SparkBuild LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# SparkBuild - Standalone CMake GUI Builder for SparkEngine
-# Zero external dependencies - uses only Windows SDK APIs
+# SparkBuild - Cross-platform CMake Build Tool for SparkEngine
+# Supports: Windows, Linux, macOS
 
-add_executable(SparkBuild WIN32
+set(SPARKBUILD_SOURCES
     src/main.cpp
-    src/SparkBuild.h
-    src/SparkBuild.cpp
+    src/Platform.h
     src/Config.h
     src/Config.cpp
     src/ProcessRunner.h
     src/ProcessRunner.cpp
     src/Downloader.h
     src/Downloader.cpp
-    src/EnvironmentTab.h
-    src/EnvironmentTab.cpp
-    src/ConfigureTab.h
-    src/ConfigureTab.cpp
-    src/BuildTab.h
-    src/BuildTab.cpp
+    src/Terminal.h
+    src/Terminal.cpp
+    src/SparkBuild.h
+    src/SparkBuild.cpp
 )
 
-# Resource file (version info, icon, manifest)
+# Console application (cross-platform TUI)
+add_executable(SparkBuild ${SPARKBUILD_SOURCES})
+
+# Resource file for Windows (version info, icon)
 if(WIN32)
     target_sources(SparkBuild PRIVATE resources/SparkBuild.rc)
 endif()
 
 target_include_directories(SparkBuild PRIVATE src)
 
-# Link Windows system libraries (no external dependencies)
+# Platform-specific linking
 if(WIN32)
     target_link_libraries(SparkBuild PRIVATE
-        comctl32      # Common Controls (tabs, list views, progress bars)
         winhttp       # HTTP downloads (WinHTTP API)
         shlwapi       # Shell lightweight utility functions
         shell32       # Shell API (folder dialogs, ZIP extraction)
         ole32         # COM runtime
-        oleaut32      # OLE Automation (VARIANT, SysAllocString)
-        uuid          # COM GUIDs (CLSID_Shell, IID_IShellDispatch)
-        comdlg32      # Common dialogs
+        oleaut32      # OLE Automation
+        uuid          # COM GUIDs
     )
-endif()
 
-# MSVC-specific settings
-if(MSVC)
-    # Use static CRT for zero-dependency .exe
-    set_property(TARGET SparkBuild PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
-    # Suppress common warnings for Win32 API usage
     target_compile_definitions(SparkBuild PRIVATE
         _CRT_SECURE_NO_WARNINGS
         NOMINMAX
         UNICODE
         _UNICODE
     )
+endif()
+
+# MSVC-specific settings
+if(MSVC)
+    set_property(TARGET SparkBuild PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+# GCC/Clang settings
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_link_libraries(SparkBuild PRIVATE pthread)
+    target_compile_options(SparkBuild PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Output to a predictable location

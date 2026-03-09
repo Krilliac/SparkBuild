@@ -1,36 +1,41 @@
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#include <commctrl.h>
-#include <objbase.h>
+#include "Platform.h"
 #include "SparkBuild.h"
+#include <iostream>
+#include <string>
 
-#pragma comment(linker, "/manifestdependency:\"type='win32' " \
-    "name='Microsoft.Windows.Common-Controls' " \
-    "version='6.0.0.0' processorArchitecture='*' " \
-    "publicKeyToken='6595b64144ccf1df' language='*'\"")
+#ifdef SPARK_PLATFORM_WINDOWS
+    #ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+    #endif
+    #include <windows.h>
+#endif
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
-    // Initialize COM (needed for Shell API / folder dialogs)
-    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+int main(int argc, char* argv[]) {
+#ifdef SPARK_PLATFORM_WINDOWS
+    // Enable UTF-8 console output
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
 
-    // Initialize common controls (tabs, list views, progress bars)
-    INITCOMMONCONTROLSEX icc = {};
-    icc.dwSize = sizeof(icc);
-    icc.dwICC = ICC_TAB_CLASSES | ICC_LISTVIEW_CLASSES | ICC_PROGRESS_CLASS |
-                ICC_BAR_CLASSES | ICC_STANDARD_CLASSES;
-    InitCommonControlsEx(&icc);
-
-    SparkBuild::SparkBuildApp app(hInstance);
-    if (!app.Init()) {
-        MessageBoxW(nullptr, L"Failed to initialize SparkBuild.", L"Error", MB_OK | MB_ICONERROR);
-        CoUninitialize();
-        return 1;
+    // Check for help/version flags
+    if (argc > 1) {
+        std::string arg = argv[1];
+        if (arg == "--help" || arg == "-h") {
+            std::cout << "SparkBuild - SparkEngine Build Tool v2.0\n\n";
+            std::cout << "Usage:\n";
+            std::cout << "  sparkbuild              Run interactive TUI\n";
+            std::cout << "  sparkbuild --help       Show this help\n";
+            std::cout << "  sparkbuild --version    Show version\n\n";
+            std::cout << "Platform: " SPARK_PLATFORM_NAME "\n";
+            return 0;
+        }
+        if (arg == "--version" || arg == "-v") {
+            std::cout << "SparkBuild v2.0.0 (" SPARK_PLATFORM_NAME ")\n";
+            return 0;
+        }
     }
 
-    int result = app.Run();
-
-    CoUninitialize();
-    return result;
+    // Interactive TUI mode
+    SparkBuild::SparkBuildApp app;
+    return app.Run();
 }

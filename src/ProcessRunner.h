@@ -1,19 +1,23 @@
 #pragma once
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
+#include "Platform.h"
 #include <string>
 #include <functional>
 #include <thread>
 #include <mutex>
 #include <atomic>
-#include <vector>
+
+#ifdef SPARK_PLATFORM_WINDOWS
+    #ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+    #endif
+    #include <windows.h>
+#else
+    #include <sys/types.h>
+#endif
 
 namespace SparkBuild {
 
-// Callback types for process events
 using OutputCallback = std::function<void(const std::string& line)>;
 using CompletionCallback = std::function<void(int exitCode, bool success)>;
 
@@ -22,27 +26,17 @@ public:
     ProcessRunner();
     ~ProcessRunner();
 
-    // Run a command asynchronously. Output is delivered via callbacks.
-    // workingDir: working directory for the process (empty = current dir)
-    // Returns true if the process was started successfully.
     bool RunAsync(const std::string& command,
                   const std::string& workingDir,
                   OutputCallback onOutput,
                   CompletionCallback onComplete);
 
-    // Run a command synchronously, capturing all output.
-    // Returns the exit code.
     int RunSync(const std::string& command,
                 const std::string& workingDir,
                 std::string& output);
 
-    // Cancel a running async process
     void Cancel();
-
-    // Check if a process is currently running
     bool IsRunning() const { return m_running.load(); }
-
-    // Get the exit code of the last completed process
     int GetExitCode() const { return m_exitCode; }
 
 private:
@@ -51,15 +45,19 @@ private:
                          OutputCallback onOutput,
                          CompletionCallback onComplete);
 
-    // Read all available output from a pipe handle, calling onOutput per line
-    void ReadPipeOutput(HANDLE hPipe, OutputCallback& onOutput, std::string& lineBuffer);
-
     std::thread m_thread;
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_cancelRequested{false};
-    HANDLE m_hProcess = nullptr;
-    std::mutex m_processMutex;
     int m_exitCode = 0;
+    std::mutex m_processMutex;
+
+#ifdef SPARK_PLATFORM_WINDOWS
+    HANDLE m_hProcess = nullptr;
+    void ReadPipeOutput(HANDLE hPipe, OutputCallback& onOutput, std::string& lineBuffer);
+#else
+    pid_t m_childPid = -1;
+    void ReadPipeOutput(int fd, OutputCallback& onOutput, std::string& lineBuffer);
+#endif
 };
 
 } // namespace SparkBuild

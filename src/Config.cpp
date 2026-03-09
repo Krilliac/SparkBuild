@@ -3,27 +3,42 @@
 #include <sstream>
 #include <algorithm>
 #include <filesystem>
+#include <cstdlib>
+
+#ifdef SPARK_PLATFORM_WINDOWS
+    #ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+    #endif
+    #include <windows.h>
+#else
+    #include <unistd.h>
+    #include <limits.h>
+#endif
 
 namespace SparkBuild {
 
 const char* GeneratorToString(Generator gen) {
     switch (gen) {
-        case Generator::VS2022:       return "Visual Studio 17 2022";
-        case Generator::VS2026:       return "Visual Studio 18 2026";
-        case Generator::Ninja:        return "Ninja";
-        case Generator::UnixMakefiles:return "Unix Makefiles";
+        case Generator::VS2022:           return "Visual Studio 17 2022";
+        case Generator::VS2026:           return "Visual Studio 18 2026";
+        case Generator::Ninja:            return "Ninja";
+        case Generator::NinjaMultiConfig: return "Ninja Multi-Config";
+        case Generator::UnixMakefiles:    return "Unix Makefiles";
+        case Generator::Xcode:            return "Xcode";
     }
-    return "Visual Studio 17 2022";
+    return "Ninja";
 }
 
 const char* GeneratorDisplayName(Generator gen) {
     switch (gen) {
-        case Generator::VS2022:       return "Visual Studio 2022";
-        case Generator::VS2026:       return "Visual Studio 2026";
-        case Generator::Ninja:        return "Ninja";
-        case Generator::UnixMakefiles:return "Unix Makefiles";
+        case Generator::VS2022:           return "Visual Studio 2022";
+        case Generator::VS2026:           return "Visual Studio 2026";
+        case Generator::Ninja:            return "Ninja";
+        case Generator::NinjaMultiConfig: return "Ninja Multi-Config";
+        case Generator::UnixMakefiles:    return "Unix Makefiles (Make)";
+        case Generator::Xcode:            return "Xcode";
     }
-    return "Visual Studio 2022";
+    return "Ninja";
 }
 
 const char* BuildTypeToString(BuildType bt) {
@@ -31,6 +46,7 @@ const char* BuildTypeToString(BuildType bt) {
         case BuildType::Debug:         return "Debug";
         case BuildType::Release:       return "Release";
         case BuildType::RelWithDebInfo:return "RelWithDebInfo";
+        case BuildType::MinSizeRel:    return "MinSizeRel";
     }
     return "Release";
 }
@@ -39,12 +55,42 @@ const char* CategoryDisplayName(OptionCategory cat) {
     switch (cat) {
         case OptionCategory::Core:         return "Core Systems";
         case OptionCategory::Graphics:     return "Graphics";
+        case OptionCategory::Audio:        return "Audio";
         case OptionCategory::EditorTools:  return "Editor & Tools";
         case OptionCategory::Scripting:    return "Scripting";
         case OptionCategory::Gameplay:     return "Gameplay Systems";
         case OptionCategory::Experimental: return "Experimental";
     }
     return "Other";
+}
+
+std::vector<Generator> GetAvailableGenerators() {
+    std::vector<Generator> gens;
+#ifdef SPARK_PLATFORM_WINDOWS
+    gens.push_back(Generator::VS2022);
+    gens.push_back(Generator::VS2026);
+    gens.push_back(Generator::Ninja);
+    gens.push_back(Generator::NinjaMultiConfig);
+    gens.push_back(Generator::UnixMakefiles);
+#elif defined(SPARK_PLATFORM_MACOS)
+    gens.push_back(Generator::Ninja);
+    gens.push_back(Generator::NinjaMultiConfig);
+    gens.push_back(Generator::Xcode);
+    gens.push_back(Generator::UnixMakefiles);
+#else
+    gens.push_back(Generator::Ninja);
+    gens.push_back(Generator::NinjaMultiConfig);
+    gens.push_back(Generator::UnixMakefiles);
+#endif
+    return gens;
+}
+
+Generator GetDefaultGenerator() {
+#ifdef SPARK_PLATFORM_WINDOWS
+    return Generator::VS2022;
+#else
+    return Generator::Ninja;
+#endif
 }
 
 ConfigManager::ConfigManager() {
@@ -54,48 +100,84 @@ ConfigManager::ConfigManager() {
 void ConfigManager::InitDefaults() {
     config.options.clear();
 
+    // ========================================================================
+    // Build options matching SparkEngine's CMakeLists.txt
+    // ========================================================================
+
     // Core Systems
-    config.options.push_back({"ENABLE_GRAPHICS",       "Graphics Engine",          "DirectX 11 rendering system",                     true, true, OptionCategory::Core});
-    config.options.push_back({"ENABLE_PHYSX",          "Physics (Bullet)",         "Bullet Physics 3D physics engine",                true, true, OptionCategory::Core});
-    config.options.push_back({"ENABLE_AI",             "AI & Navigation",          "AI systems and NavMesh pathfinding",              true, true, OptionCategory::Core});
-    config.options.push_back({"ENABLE_ANIMATION",      "Skeletal Animation",       "Skeletal animation system",                       true, true, OptionCategory::Core});
-    config.options.push_back({"ENABLE_SAVE_SYSTEM",    "Save/Load System",         "Save and load game state",                        true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_GRAPHICS",       "Graphics Engine",          "DirectX 11 renderer (Windows) / OpenGL (Linux/macOS)",     true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_PHYSICS",         "Physics (Bullet)",         "Bullet Physics 3D physics engine",                        true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_AI",             "AI & Navigation",          "Behavior trees, NavMesh pathfinding, perception system",  true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_ANIMATION",      "Skeletal Animation",       "Skeletal animation, IK, state machines, blending",        true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_ECS",            "Entity Component System",  "EnTT-based entity component system",                      true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_SAVE_SYSTEM",    "Save/Load System",         "JSON serialization with compression (miniz)",              true, true, OptionCategory::Core});
+
+    // Audio
+    config.options.push_back({"ENABLE_AUDIO",          "Audio System",             "3D spatial audio (XAudio2/miniaudio)",                     true, true, OptionCategory::Audio});
 
     // Graphics
-    config.options.push_back({"ENABLE_VULKAN",         "Vulkan Backend",           "Vulkan graphics backend (experimental)",          true, true, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_OPENGL",         "OpenGL Backend",           "OpenGL 4.5 graphics backend (experimental)",      true, true, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_DXR",            "DirectX Raytracing",       "DXR support (requires D3D12)",                    false, false, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_POST_PROCESSING","Post-Processing",          "Bloom, tone mapping, FXAA effects",               true, true, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_LIGHTING_SYSTEM","Advanced Lighting",        "Advanced lighting and IBL system",                true, true, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_DECALS",         "Decal System",             "Projected decals for impacts and effects",        true, true, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_MESH_LOD",       "Mesh LOD",                 "Mesh level-of-detail system",                     true, true, OptionCategory::Graphics});
+    config.options.push_back({"ENABLE_VULKAN",         "Vulkan Backend",           "Vulkan graphics backend (experimental)",                  false, false, OptionCategory::Graphics});
+    config.options.push_back({"ENABLE_OPENGL",         "OpenGL Backend",           "OpenGL 4.5 backend (Linux/macOS primary)",                false, false, OptionCategory::Graphics});
+    config.options.push_back({"ENABLE_DXR",            "DirectX Raytracing",       "DXR support (requires D3D12, Windows only)",              false, false, OptionCategory::Graphics});
+    config.options.push_back({"ENABLE_POST_PROCESSING","Post-Processing",          "Bloom, tone mapping, FXAA, SSAO effects",                true, true, OptionCategory::Graphics});
+    config.options.push_back({"ENABLE_LIGHTING_SYSTEM","Advanced Lighting",        "PBR lighting, IBL, shadow mapping",                       true, true, OptionCategory::Graphics});
+    config.options.push_back({"ENABLE_DECALS",         "Decal System",             "Projected decals for impacts and effects",                true, true, OptionCategory::Graphics});
+    config.options.push_back({"ENABLE_MESH_LOD",       "Mesh LOD",                 "Mesh level-of-detail system",                             true, true, OptionCategory::Graphics});
 
     // Editor & Tools
-    config.options.push_back({"ENABLE_EDITOR",         "Editor (Windows Only)",    "ImGui visual editor (Win32 + DX11 only)",         true, true, OptionCategory::EditorTools});
-    config.options.push_back({"ENABLE_PROFILING",      "Profiling Tools",          "Performance profiling and monitoring",             true, true, OptionCategory::EditorTools});
-    config.options.push_back({"BUILD_TESTS",           "Unit Tests",               "Build the test suite",                            true, true, OptionCategory::EditorTools});
+    config.options.push_back({"ENABLE_EDITOR",         "Editor",                   "ImGui visual editor (Windows: DX11, Linux: OpenGL)",      true, true, OptionCategory::EditorTools});
+    config.options.push_back({"ENABLE_PROFILING",      "Profiling Tools",          "Performance profiling, timers, memory tracking",          true, true, OptionCategory::EditorTools});
+    config.options.push_back({"BUILD_TESTS",           "Unit Tests",               "Build 35+ CTest unit tests",                              true, true, OptionCategory::EditorTools});
+    config.options.push_back({"BUILD_CONSOLE",         "Debug Console",            "Standalone debug console (200+ commands)",                 true, true, OptionCategory::EditorTools});
+    config.options.push_back({"BUILD_SHADER_COMPILER", "Shader Compiler",          "Offline shader compilation tool",                         true, true, OptionCategory::EditorTools});
 
     // Scripting
-    config.options.push_back({"ENABLE_LUA",            "Lua Scripting",            "Lua scripting language support",                  true, true, OptionCategory::Scripting});
-    config.options.push_back({"ENABLE_HOT_RELOAD",     "Hot Reload",               "Script hot-reload during development",            true, true, OptionCategory::Scripting});
+    config.options.push_back({"ENABLE_SCRIPTING",      "AngelScript Scripting",    "AngelScript VM for game scripting",                       true, true, OptionCategory::Scripting});
+    config.options.push_back({"ENABLE_HOT_RELOAD",     "Hot Reload",               "Game module hot-reload during development",               true, true, OptionCategory::Scripting});
 
     // Gameplay Systems
-    config.options.push_back({"ENABLE_TERRAIN_SYSTEM", "Terrain System",           "Heightmap terrain with LOD",                      true, true, OptionCategory::Gameplay});
-    config.options.push_back({"ENABLE_ADVANCED_INPUT", "Advanced Input",           "Extended input features (gamepad, etc.)",          true, true, OptionCategory::Gameplay});
-    config.options.push_back({"ENABLE_ASSET_STREAMING","Asset Streaming",          "Runtime asset streaming",                         true, true, OptionCategory::Gameplay});
-    config.options.push_back({"ENABLE_PROCEDURAL",     "Procedural Generation",    "Procedural content generation",                   true, true, OptionCategory::Gameplay});
-    config.options.push_back({"ENABLE_CINEMATIC",      "Cinematic Sequencer",      "Cinematic sequence system",                       true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_TERRAIN_SYSTEM", "Terrain System",           "Heightmap terrain with LOD and erosion",                  true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_ADVANCED_INPUT", "Advanced Input",           "Extended input: keyboard, mouse, gamepad",                true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_ASSET_STREAMING","Asset Streaming",          "Runtime asset streaming and loading",                     true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_PROCEDURAL",     "Procedural Generation",    "Noise, erosion, mesh gen, WFC algorithms",                true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_CINEMATIC",      "Cinematic Sequencer",      "Cinematic sequence and cutscene system",                  true, true, OptionCategory::Gameplay});
 
     // Experimental
-    config.options.push_back({"ENABLE_NETWORKING",     "Networking",               "Networking features (disabled: CURL issues)",      false, false, OptionCategory::Experimental});
-    config.options.push_back({"ENABLE_SDL2",           "SDL2 Input",               "SDL2 cross-platform input (requires SDL2)",       false, false, OptionCategory::Experimental});
-    config.options.push_back({"ENABLE_COLLABORATIVE",  "Collaborative",            "Collaborative editing features",                  true, true, OptionCategory::Experimental});
+    config.options.push_back({"ENABLE_NETWORKING",     "Networking",               "UDP multiplayer, lag compensation (requires curl)",       false, false, OptionCategory::Experimental});
+    config.options.push_back({"ENABLE_SDL2",           "SDL2 Windowing",           "SDL2 cross-platform windowing (Linux primary)",           false, false, OptionCategory::Experimental});
+    config.options.push_back({"ENABLE_COLLABORATIVE",  "Collaborative Editing",    "Collaborative editing features",                          false, false, OptionCategory::Experimental});
 
-    // Set default paths
+    // Set platform-appropriate defaults
     config.buildPath = "build";
     config.parallelJobs = 0;
-    config.generator = Generator::VS2022;
+    config.generator = GetDefaultGenerator();
     config.buildType = BuildType::Release;
+
+#ifdef SPARK_PLATFORM_LINUX
+    // On Linux, enable SDL2 and OpenGL by default
+    for (auto& opt : config.options) {
+        if (opt.cmakeVar == "ENABLE_SDL2" || opt.cmakeVar == "ENABLE_OPENGL") {
+            opt.defaultValue = true;
+            opt.currentValue = true;
+        }
+        // DXR is Windows-only
+        if (opt.cmakeVar == "ENABLE_DXR") {
+            opt.defaultValue = false;
+            opt.currentValue = false;
+        }
+    }
+#elif defined(SPARK_PLATFORM_MACOS)
+    for (auto& opt : config.options) {
+        if (opt.cmakeVar == "ENABLE_OPENGL") {
+            opt.defaultValue = true;
+            opt.currentValue = true;
+        }
+        if (opt.cmakeVar == "ENABLE_DXR") {
+            opt.defaultValue = false;
+            opt.currentValue = false;
+        }
+    }
+#endif
 }
 
 void ConfigManager::ApplyPresetAllOn() {
@@ -116,11 +198,21 @@ void ConfigManager::ApplyPresetDefaults() {
 void ConfigManager::ApplyPresetMinimal() {
     for (auto& opt : config.options)
         opt.currentValue = false;
-    // Enable only core essentials
     for (auto& opt : config.options) {
-        if (opt.cmakeVar == "ENABLE_GRAPHICS" || opt.cmakeVar == "ENABLE_PHYSX")
+        if (opt.cmakeVar == "ENABLE_GRAPHICS" || opt.cmakeVar == "ENABLE_PHYSICS")
             opt.currentValue = true;
     }
+}
+
+void ConfigManager::ApplyPresetLinuxFriendly() {
+    ApplyPresetDefaults();
+    for (auto& opt : config.options) {
+        if (opt.cmakeVar == "ENABLE_SDL2" || opt.cmakeVar == "ENABLE_OPENGL")
+            opt.currentValue = true;
+        if (opt.cmakeVar == "ENABLE_DXR")
+            opt.currentValue = false;
+    }
+    config.generator = Generator::Ninja;
 }
 
 static std::string Trim(const std::string& s) {
@@ -158,15 +250,20 @@ bool ConfigManager::Load(const std::string& iniPath) {
                 if (val == "VS2022") config.generator = Generator::VS2022;
                 else if (val == "VS2026") config.generator = Generator::VS2026;
                 else if (val == "Ninja") config.generator = Generator::Ninja;
+                else if (val == "NinjaMultiConfig") config.generator = Generator::NinjaMultiConfig;
                 else if (val == "UnixMakefiles") config.generator = Generator::UnixMakefiles;
+                else if (val == "Xcode") config.generator = Generator::Xcode;
             } else if (key == "BuildType") {
                 if (val == "Debug") config.buildType = BuildType::Debug;
                 else if (val == "Release") config.buildType = BuildType::Release;
                 else if (val == "RelWithDebInfo") config.buildType = BuildType::RelWithDebInfo;
+                else if (val == "MinSizeRel") config.buildType = BuildType::MinSizeRel;
             } else if (key == "MSVCToolset") {
                 config.msvcToolset = val;
             } else if (key == "ParallelJobs") {
                 config.parallelJobs = std::atoi(val.c_str());
+            } else if (key == "CMakePreset") {
+                config.cmakePreset = val;
             }
         } else if (currentSection == "Options") {
             for (auto& opt : config.options) {
@@ -181,11 +278,17 @@ bool ConfigManager::Load(const std::string& iniPath) {
 }
 
 bool ConfigManager::Save(const std::string& iniPath) const {
+    // Create parent directory if needed
+    auto parent = std::filesystem::path(iniPath).parent_path();
+    if (!parent.empty()) {
+        std::filesystem::create_directories(parent);
+    }
+
     std::ofstream file(iniPath);
     if (!file.is_open()) return false;
 
     file << "; SparkBuild Configuration\n";
-    file << "; Auto-generated - edit with SparkBuild GUI\n\n";
+    file << "; Auto-generated by SparkBuild\n\n";
 
     file << "[Paths]\n";
     file << "EnginePath=" << config.enginePath << "\n";
@@ -194,14 +297,17 @@ bool ConfigManager::Save(const std::string& iniPath) const {
 
     file << "[Build]\n";
     switch (config.generator) {
-        case Generator::VS2022:        file << "Generator=VS2022\n"; break;
-        case Generator::VS2026:        file << "Generator=VS2026\n"; break;
-        case Generator::Ninja:         file << "Generator=Ninja\n"; break;
-        case Generator::UnixMakefiles: file << "Generator=UnixMakefiles\n"; break;
+        case Generator::VS2022:           file << "Generator=VS2022\n"; break;
+        case Generator::VS2026:           file << "Generator=VS2026\n"; break;
+        case Generator::Ninja:            file << "Generator=Ninja\n"; break;
+        case Generator::NinjaMultiConfig: file << "Generator=NinjaMultiConfig\n"; break;
+        case Generator::UnixMakefiles:    file << "Generator=UnixMakefiles\n"; break;
+        case Generator::Xcode:            file << "Generator=Xcode\n"; break;
     }
     file << "BuildType=" << BuildTypeToString(config.buildType) << "\n";
     file << "MSVCToolset=" << config.msvcToolset << "\n";
-    file << "ParallelJobs=" << config.parallelJobs << "\n\n";
+    file << "ParallelJobs=" << config.parallelJobs << "\n";
+    file << "CMakePreset=" << config.cmakePreset << "\n\n";
 
     file << "[Options]\n";
     for (const auto& opt : config.options) {
@@ -212,19 +318,28 @@ bool ConfigManager::Save(const std::string& iniPath) const {
 }
 
 std::string ConfigManager::BuildCMakeConfigureCommand() const {
-    std::string cmd;
     std::string cmake = config.cmakePath.empty() ? "cmake" : ("\"" + config.cmakePath + "\"");
+
+    // If using a preset, the command is much simpler
+    if (!config.cmakePreset.empty()) {
+        std::string srcDir = config.enginePath.empty() ? "." : ("\"" + config.enginePath + "\"");
+        return cmake + " --preset " + config.cmakePreset + " -S " + srcDir;
+    }
+
     std::string srcDir = config.enginePath.empty() ? "." : ("\"" + config.enginePath + "\"");
     std::string buildDir = config.buildPath.empty() ? "build" : config.buildPath;
 
-    cmd = cmake + " -S " + srcDir + " -B \"" + buildDir + "\"";
+    std::string cmd = cmake + " -S " + srcDir + " -B \"" + buildDir + "\"";
     cmd += " -G \"" + std::string(GeneratorToString(config.generator)) + "\"";
 
     // Build type (for single-config generators like Ninja/Makefiles)
-    if (config.generator == Generator::Ninja || config.generator == Generator::UnixMakefiles) {
+    bool singleConfig = (config.generator == Generator::Ninja ||
+                         config.generator == Generator::UnixMakefiles);
+    if (singleConfig) {
         cmd += " -DCMAKE_BUILD_TYPE=" + std::string(BuildTypeToString(config.buildType));
     }
 
+#ifdef SPARK_PLATFORM_WINDOWS
     // MSVC toolset override
     if (!config.msvcToolset.empty() &&
         (config.generator == Generator::VS2022 || config.generator == Generator::VS2026)) {
@@ -235,6 +350,7 @@ std::string ConfigManager::BuildCMakeConfigureCommand() const {
     if (config.generator == Generator::VS2022 || config.generator == Generator::VS2026) {
         cmd += " -A x64";
     }
+#endif
 
     // All build options
     for (const auto& opt : config.options) {
@@ -261,6 +377,8 @@ std::string ConfigManager::BuildCMakeBuildCommand() const {
 }
 
 std::string ConfigManager::GetDefaultIniPath() {
+#ifdef SPARK_PLATFORM_WINDOWS
+    // Try next to the exe first
     char exePath[MAX_PATH] = {};
     GetModuleFileNameA(nullptr, exePath, MAX_PATH);
     std::string path(exePath);
@@ -269,6 +387,53 @@ std::string ConfigManager::GetDefaultIniPath() {
         path = path.substr(0, pos + 1);
     }
     return path + "sparkbuild.ini";
+#else
+    // Use XDG config dir on Unix, falling back to ~/.config
+    const char* xdgConfig = std::getenv("XDG_CONFIG_HOME");
+    std::string configDir;
+    if (xdgConfig && xdgConfig[0] != '\0') {
+        configDir = std::string(xdgConfig) + "/sparkbuild";
+    } else {
+        const char* home = std::getenv("HOME");
+        if (home) {
+            configDir = std::string(home) + "/.config/sparkbuild";
+        } else {
+            configDir = ".";
+        }
+    }
+    return configDir + "/sparkbuild.ini";
+#endif
+}
+
+std::vector<std::string> ConfigManager::DetectCMakePresets() const {
+    std::vector<std::string> presets;
+    if (config.enginePath.empty()) return presets;
+
+    std::string presetsFile = config.enginePath + SPARK_PATH_SEP + "CMakePresets.json";
+    if (!std::filesystem::exists(presetsFile)) return presets;
+
+    // Simple JSON parsing to extract preset names
+    std::ifstream file(presetsFile);
+    if (!file.is_open()) return presets;
+
+    std::string content((std::istreambuf_iterator<char>(file)),
+                         std::istreambuf_iterator<char>());
+
+    // Look for "name": "value" patterns in configurePresets
+    size_t pos = content.find("\"configurePresets\"");
+    if (pos == std::string::npos) return presets;
+
+    while ((pos = content.find("\"name\"", pos)) != std::string::npos) {
+        pos = content.find("\"", pos + 6);
+        if (pos == std::string::npos) break;
+        pos++;
+        size_t end = content.find("\"", pos);
+        if (end == std::string::npos) break;
+        presets.push_back(content.substr(pos, end - pos));
+        pos = end + 1;
+    }
+
+    return presets;
 }
 
 } // namespace SparkBuild

@@ -1,27 +1,40 @@
 #include "Downloader.h"
-#include <winhttp.h>
-#include <ole2.h>
-#include <oleauto.h>
-#include <shlobj.h>
-#include <shlwapi.h>
-#include <shldisp.h>
 #include <fstream>
 #include <filesystem>
+#include <cstdlib>
 
-#pragma comment(lib, "winhttp.lib")
-#pragma comment(lib, "shlwapi.lib")
-#pragma comment(lib, "shell32.lib")
-#pragma comment(lib, "ole32.lib")
-#pragma comment(lib, "oleaut32.lib")
-#pragma comment(lib, "uuid.lib")
+#ifdef SPARK_PLATFORM_WINDOWS
+    #ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+    #endif
+    #include <windows.h>
+    #include <winhttp.h>
+    #include <ole2.h>
+    #include <oleauto.h>
+    #include <shlobj.h>
+    #include <shlwapi.h>
+    #include <shldisp.h>
+
+    #pragma comment(lib, "winhttp.lib")
+    #pragma comment(lib, "shlwapi.lib")
+    #pragma comment(lib, "shell32.lib")
+    #pragma comment(lib, "ole32.lib")
+    #pragma comment(lib, "oleaut32.lib")
+    #pragma comment(lib, "uuid.lib")
+#else
+    #include <unistd.h>
+#endif
 
 namespace SparkBuild {
 
-// Parse a URL into host, path, and whether it's HTTPS
+// ============================================================================
+// Windows implementation
+// ============================================================================
+#ifdef SPARK_PLATFORM_WINDOWS
+
 static bool ParseUrl(const std::string& url, std::wstring& host, std::wstring& path, bool& isHttps) {
     URL_COMPONENTS uc = {};
     uc.dwStructSize = sizeof(uc);
-
     wchar_t hostBuf[256] = {};
     wchar_t pathBuf[2048] = {};
     uc.lpszHostName = hostBuf;
@@ -29,15 +42,11 @@ static bool ParseUrl(const std::string& url, std::wstring& host, std::wstring& p
     uc.lpszUrlPath = pathBuf;
     uc.dwUrlPathLength = 2048;
 
-    // Convert URL to wide string
     int wlen = MultiByteToWideChar(CP_UTF8, 0, url.c_str(), -1, nullptr, 0);
     std::wstring wurl(wlen, 0);
     MultiByteToWideChar(CP_UTF8, 0, url.c_str(), -1, wurl.data(), wlen);
 
-    if (!WinHttpCrackUrl(wurl.c_str(), 0, 0, &uc)) {
-        return false;
-    }
-
+    if (!WinHttpCrackUrl(wurl.c_str(), 0, 0, &uc)) return false;
     host = hostBuf;
     path = pathBuf;
     isHttps = (uc.nScheme == INTERNET_SCHEME_HTTPS);
@@ -49,11 +58,9 @@ bool Downloader::DownloadFile(const std::string& url,
                                DownloadProgressCallback progress) {
     std::wstring host, path;
     bool isHttps = true;
-    if (!ParseUrl(url, host, path, isHttps)) {
-        return false;
-    }
+    if (!ParseUrl(url, host, path, isHttps)) return false;
 
-    HINTERNET hSession = WinHttpOpen(L"SparkBuild/1.0",
+    HINTERNET hSession = WinHttpOpen(L"SparkBuild/2.0",
                                       WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                       WINHTTP_NO_PROXY_NAME,
                                       WINHTTP_NO_PROXY_BYPASS, 0);
@@ -76,16 +83,11 @@ bool Downloader::DownloadFile(const std::string& url,
         return false;
     }
 
-    // Follow redirects automatically (up to 5)
     DWORD maxRedirects = 5;
     for (DWORD attempt = 0; attempt <= maxRedirects; ++attempt) {
         if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-                                WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
-            break;
-        }
-        if (!WinHttpReceiveResponse(hRequest, nullptr)) {
-            break;
-        }
+                                WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) break;
+        if (!WinHttpReceiveResponse(hRequest, nullptr)) break;
 
         DWORD statusCode = 0;
         DWORD statusSize = sizeof(statusCode);
@@ -93,7 +95,6 @@ bool Downloader::DownloadFile(const std::string& url,
                             WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize, WINHTTP_NO_HEADER_INDEX);
 
         if (statusCode >= 300 && statusCode < 400) {
-            // Handle redirect
             wchar_t redirectUrl[2048] = {};
             DWORD redirectSize = sizeof(redirectUrl);
             if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_LOCATION,
@@ -111,7 +112,6 @@ bool Downloader::DownloadFile(const std::string& url,
                 uc.dwUrlPathLength = 2048;
 
                 if (!WinHttpCrackUrl(redirectUrl, 0, 0, &uc)) break;
-
                 host = hostBuf;
                 path = pathBuf;
                 isHttps = (uc.nScheme == INTERNET_SCHEME_HTTPS);
@@ -119,7 +119,6 @@ bool Downloader::DownloadFile(const std::string& url,
 
                 hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
                 if (!hConnect) break;
-
                 flags = isHttps ? WINHTTP_FLAG_SECURE : 0;
                 hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(),
                                                nullptr, WINHTTP_NO_REFERER,
@@ -132,7 +131,6 @@ bool Downloader::DownloadFile(const std::string& url,
 
         if (statusCode != 200) break;
 
-        // Get content length if available
         size_t totalBytes = 0;
         wchar_t contentLength[32] = {};
         DWORD clSize = sizeof(contentLength);
@@ -141,7 +139,6 @@ bool Downloader::DownloadFile(const std::string& url,
             totalBytes = static_cast<size_t>(_wtoi64(contentLength));
         }
 
-        // Create output directory if needed
         std::filesystem::path outPath(outputPath);
         if (outPath.has_parent_path()) {
             std::filesystem::create_directories(outPath.parent_path());
@@ -163,14 +160,10 @@ bool Downloader::DownloadFile(const std::string& url,
             }
             outFile.write(buf.data(), bytesRead);
             bytesDownloaded += bytesRead;
-
-            if (progress) {
-                progress(bytesDownloaded, totalBytes);
-            }
+            if (progress) progress(bytesDownloaded, totalBytes);
         }
 
         outFile.close();
-
         WinHttpCloseHandle(hRequest);
         WinHttpCloseHandle(hConnect);
         WinHttpCloseHandle(hSession);
@@ -184,10 +177,8 @@ bool Downloader::DownloadFile(const std::string& url,
 }
 
 bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destDir) {
-    // Use the Shell API to extract ZIP files — no external dependencies needed
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
-    // Convert paths to wide strings
     int zipWLen = MultiByteToWideChar(CP_UTF8, 0, zipPath.c_str(), -1, nullptr, 0);
     std::wstring zipW(zipWLen, 0);
     MultiByteToWideChar(CP_UTF8, 0, zipPath.c_str(), -1, zipW.data(), zipWLen);
@@ -196,10 +187,8 @@ bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destD
     std::wstring destW(destWLen, 0);
     MultiByteToWideChar(CP_UTF8, 0, destDir.c_str(), -1, destW.data(), destWLen);
 
-    // Create destination directory
     std::filesystem::create_directories(destDir);
 
-    // Use IShellDispatch to extract
     IShellDispatch* pShell = nullptr;
     HRESULT hr = CoCreateInstance(CLSID_Shell, nullptr, CLSCTX_INPROC_SERVER,
                                   IID_IShellDispatch, (void**)&pShell);
@@ -208,7 +197,6 @@ bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destD
     VARIANT vZip, vDest;
     VariantInit(&vZip);
     VariantInit(&vDest);
-
     vZip.vt = VT_BSTR;
     vZip.bstrVal = SysAllocString(zipW.c_str());
     vDest.vt = VT_BSTR;
@@ -217,30 +205,22 @@ bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destD
     Folder* pZipFolder = nullptr;
     hr = pShell->NameSpace(vZip, &pZipFolder);
     if (FAILED(hr) || !pZipFolder) {
-        VariantClear(&vZip);
-        VariantClear(&vDest);
-        pShell->Release();
+        VariantClear(&vZip); VariantClear(&vDest); pShell->Release();
         return false;
     }
 
     Folder* pDestFolder = nullptr;
     hr = pShell->NameSpace(vDest, &pDestFolder);
     if (FAILED(hr) || !pDestFolder) {
-        pZipFolder->Release();
-        VariantClear(&vZip);
-        VariantClear(&vDest);
-        pShell->Release();
+        pZipFolder->Release(); VariantClear(&vZip); VariantClear(&vDest); pShell->Release();
         return false;
     }
 
     FolderItems* pItems = nullptr;
     pZipFolder->Items(&pItems);
     if (!pItems) {
-        pDestFolder->Release();
-        pZipFolder->Release();
-        VariantClear(&vZip);
-        VariantClear(&vDest);
-        pShell->Release();
+        pDestFolder->Release(); pZipFolder->Release();
+        VariantClear(&vZip); VariantClear(&vDest); pShell->Release();
         return false;
     }
 
@@ -249,11 +229,10 @@ bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destD
     vItems.vt = VT_DISPATCH;
     vItems.pdispVal = pItems;
 
-    // FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT = 0x0614
     VARIANT vOptions;
     VariantInit(&vOptions);
     vOptions.vt = VT_I4;
-    vOptions.lVal = 0x0614;
+    vOptions.lVal = 0x0614; // FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT
 
     hr = pDestFolder->CopyHere(vItems, vOptions);
 
@@ -267,10 +246,68 @@ bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destD
     return SUCCEEDED(hr);
 }
 
+std::string Downloader::GetTempDir() {
+    char buf[MAX_PATH] = {};
+    GetTempPathA(MAX_PATH, buf);
+    std::string path(buf);
+    if (!path.empty() && path.back() == '\\') path.pop_back();
+    return path;
+}
+
+// ============================================================================
+// Unix implementation (Linux / macOS) - uses system curl and unzip
+// ============================================================================
+#else
+
+bool Downloader::DownloadFile(const std::string& url,
+                               const std::string& outputPath,
+                               DownloadProgressCallback /*progress*/) {
+    // Create parent directories
+    auto parent = std::filesystem::path(outputPath).parent_path();
+    if (!parent.empty()) {
+        std::filesystem::create_directories(parent);
+    }
+
+    // Use curl for downloading
+    std::string cmd = "curl -fSL --progress-bar -o \"" + outputPath + "\" \"" + url + "\" 2>&1";
+    int rc = system(cmd.c_str());
+    return (rc == 0);
+}
+
+bool Downloader::ExtractZip(const std::string& zipPath, const std::string& destDir) {
+    std::filesystem::create_directories(destDir);
+
+    // Try unzip first, then python's zipfile module as fallback
+    std::string cmd = "unzip -o -q \"" + zipPath + "\" -d \"" + destDir + "\" 2>&1";
+    int rc = system(cmd.c_str());
+    if (rc == 0) return true;
+
+    // Fallback: use tar if it's a .tar.gz
+    if (zipPath.find(".tar.gz") != std::string::npos || zipPath.find(".tgz") != std::string::npos) {
+        cmd = "tar xzf \"" + zipPath + "\" -C \"" + destDir + "\" 2>&1";
+        rc = system(cmd.c_str());
+        return (rc == 0);
+    }
+
+    // Fallback: python3
+    cmd = "python3 -c \"import zipfile; zipfile.ZipFile('" + zipPath + "').extractall('" + destDir + "')\" 2>&1";
+    rc = system(cmd.c_str());
+    return (rc == 0);
+}
+
+std::string Downloader::GetTempDir() {
+    const char* tmpdir = std::getenv("TMPDIR");
+    if (tmpdir && tmpdir[0] != '\0') return tmpdir;
+    return "/tmp";
+}
+
+#endif
+
+// Common implementation
 bool Downloader::DownloadAndExtract(const std::string& url,
                                      const std::string& destDir,
                                      DownloadProgressCallback progress) {
-    std::string tempPath = GetTempDir() + "\\sparkbuild_download.zip";
+    std::string tempPath = GetTempDir() + SPARK_PATH_SEP + "sparkbuild_download.zip";
 
     if (!DownloadFile(url, tempPath, progress)) {
         return false;
@@ -279,20 +316,9 @@ bool Downloader::DownloadAndExtract(const std::string& url,
     bool ok = ExtractZip(tempPath, destDir);
 
     // Clean up temp file
-    DeleteFileA(tempPath.c_str());
+    std::filesystem::remove(tempPath);
 
     return ok;
-}
-
-std::string Downloader::GetTempDir() {
-    char buf[MAX_PATH] = {};
-    GetTempPathA(MAX_PATH, buf);
-    // Remove trailing backslash
-    std::string path(buf);
-    if (!path.empty() && path.back() == '\\') {
-        path.pop_back();
-    }
-    return path;
 }
 
 } // namespace SparkBuild
