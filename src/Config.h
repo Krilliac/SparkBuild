@@ -11,10 +11,11 @@ namespace SparkBuild {
 enum class OptionCategory {
     Core,
     Graphics,
-    Audio,
+    Rendering,
     EditorTools,
     Scripting,
     Gameplay,
+    Shipping,
     Experimental
 };
 
@@ -91,6 +92,8 @@ public:
     void ApplyPresetDefaults();
     void ApplyPresetMinimal();
     void ApplyPresetLinuxFriendly();
+    void ApplyPresetShipping();
+    void ApplyPresetDevelopment();
 
     // Build the cmake configure command line
     std::string BuildCMakeConfigureCommand() const;

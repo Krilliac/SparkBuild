@@ -54,11 +54,12 @@ const char* BuildTypeToString(BuildType bt) {
 const char* CategoryDisplayName(OptionCategory cat) {
     switch (cat) {
         case OptionCategory::Core:         return "Core Systems";
-        case OptionCategory::Graphics:     return "Graphics";
-        case OptionCategory::Audio:        return "Audio";
+        case OptionCategory::Graphics:     return "Graphics Backends";
+        case OptionCategory::Rendering:    return "Rendering & Effects";
         case OptionCategory::EditorTools:  return "Editor & Tools";
         case OptionCategory::Scripting:    return "Scripting";
         case OptionCategory::Gameplay:     return "Gameplay Systems";
+        case OptionCategory::Shipping:     return "Shipping & Deployment";
         case OptionCategory::Experimental: return "Experimental";
     }
     return "Other";
@@ -101,51 +102,62 @@ void ConfigManager::InitDefaults() {
     config.options.clear();
 
     // ========================================================================
-    // Build options matching SparkEngine's CMakeLists.txt
+    // Build options matching SparkEngine's CMakeLists.txt exactly
+    // See: https://github.com/Krilliac/SparkEngine/blob/master/CMakeLists.txt
     // ========================================================================
 
     // Core Systems
-    config.options.push_back({"ENABLE_GRAPHICS",       "Graphics Engine",          "DirectX 11 renderer (Windows) / OpenGL (Linux/macOS)",     true, true, OptionCategory::Core});
-    config.options.push_back({"ENABLE_PHYSICS",         "Physics (Bullet)",         "Bullet Physics 3D physics engine",                        true, true, OptionCategory::Core});
-    config.options.push_back({"ENABLE_AI",             "AI & Navigation",          "Behavior trees, NavMesh pathfinding, perception system",  true, true, OptionCategory::Core});
-    config.options.push_back({"ENABLE_ANIMATION",      "Skeletal Animation",       "Skeletal animation, IK, state machines, blending",        true, true, OptionCategory::Core});
-    config.options.push_back({"ENABLE_ECS",            "Entity Component System",  "EnTT-based entity component system",                      true, true, OptionCategory::Core});
-    config.options.push_back({"ENABLE_SAVE_SYSTEM",    "Save/Load System",         "JSON serialization with compression (miniz)",              true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_GRAPHICS",        "Graphics Engine",          "DirectX 11 renderer (Windows) / OpenGL (Linux/macOS)",     true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_PHYSX",            "Physics (Bullet)",         "Bullet Physics 3D physics engine",                        true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_AI",              "AI & Navigation",          "Behavior trees, NavMesh pathfinding, perception system",  true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_ANIMATION",       "Skeletal Animation",       "Skeletal animation, IK, state machines, blending",        true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_SAVE_SYSTEM",     "Save/Load System",         "JSON serialization with compression (miniz)",              true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_ADVANCED_INPUT",  "Advanced Input",           "Extended input: keyboard, mouse, gamepad",                true, true, OptionCategory::Core});
+    config.options.push_back({"ENABLE_ASSET_STREAMING", "Asset Streaming",          "Runtime asset streaming and loading",                     true, true, OptionCategory::Core});
 
-    // Audio
-    config.options.push_back({"ENABLE_AUDIO",          "Audio System",             "3D spatial audio (XAudio2/miniaudio)",                     true, true, OptionCategory::Audio});
+    // Graphics Backends
+    config.options.push_back({"ENABLE_VULKAN",          "Vulkan Backend",           "Vulkan graphics backend (experimental, cross-platform)",  true, true, OptionCategory::Graphics});
+    config.options.push_back({"ENABLE_OPENGL",          "OpenGL Backend",           "OpenGL 4.5 backend (experimental, cross-platform)",       true, true, OptionCategory::Graphics});
+    config.options.push_back({"ENABLE_DXR",             "DirectX Raytracing",       "DXR support (requires D3D12, Windows only)",              false, false, OptionCategory::Graphics});
 
-    // Graphics
-    config.options.push_back({"ENABLE_VULKAN",         "Vulkan Backend",           "Vulkan graphics backend (experimental)",                  false, false, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_OPENGL",         "OpenGL Backend",           "OpenGL 4.5 backend (Linux/macOS primary)",                false, false, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_DXR",            "DirectX Raytracing",       "DXR support (requires D3D12, Windows only)",              false, false, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_POST_PROCESSING","Post-Processing",          "Bloom, tone mapping, FXAA, SSAO effects",                true, true, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_LIGHTING_SYSTEM","Advanced Lighting",        "PBR lighting, IBL, shadow mapping",                       true, true, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_DECALS",         "Decal System",             "Projected decals for impacts and effects",                true, true, OptionCategory::Graphics});
-    config.options.push_back({"ENABLE_MESH_LOD",       "Mesh LOD",                 "Mesh level-of-detail system",                             true, true, OptionCategory::Graphics});
+    // Rendering & Effects
+    config.options.push_back({"ENABLE_POST_PROCESSING", "Post-Processing",          "Bloom, tone mapping, FXAA effects",                       true, true, OptionCategory::Rendering});
+    config.options.push_back({"ENABLE_LIGHTING_SYSTEM", "Advanced Lighting",        "PBR lighting, IBL, shadow mapping",                       true, true, OptionCategory::Rendering});
+    config.options.push_back({"ENABLE_DECALS",          "Decal System",             "Projected decals for impacts and effects",                true, true, OptionCategory::Rendering});
+    config.options.push_back({"ENABLE_MESH_LOD",        "Mesh LOD",                 "Mesh level-of-detail system",                             true, true, OptionCategory::Rendering});
+    config.options.push_back({"ENABLE_FOG_SYSTEM",      "Fog System",               "Fog rendering system",                                    true, true, OptionCategory::Rendering});
+    config.options.push_back({"ENABLE_SCREEN_SPACE",    "Screen-Space Effects",     "Screen-space effects (SSAO, SSR)",                        true, true, OptionCategory::Rendering});
 
     // Editor & Tools
-    config.options.push_back({"ENABLE_EDITOR",         "Editor",                   "ImGui visual editor (Windows: DX11, Linux: OpenGL)",      true, true, OptionCategory::EditorTools});
-    config.options.push_back({"ENABLE_PROFILING",      "Profiling Tools",          "Performance profiling, timers, memory tracking",          true, true, OptionCategory::EditorTools});
-    config.options.push_back({"BUILD_TESTS",           "Unit Tests",               "Build 35+ CTest unit tests",                              true, true, OptionCategory::EditorTools});
-    config.options.push_back({"BUILD_CONSOLE",         "Debug Console",            "Standalone debug console (200+ commands)",                 true, true, OptionCategory::EditorTools});
-    config.options.push_back({"BUILD_SHADER_COMPILER", "Shader Compiler",          "Offline shader compilation tool",                         true, true, OptionCategory::EditorTools});
+    config.options.push_back({"ENABLE_EDITOR",          "Editor",                   "ImGui visual editor (Windows/Linux)",                     true, true, OptionCategory::EditorTools});
+    config.options.push_back({"ENABLE_PROFILING",       "Profiling Tools",          "Performance profiling, timers, memory tracking",          true, true, OptionCategory::EditorTools});
+    config.options.push_back({"ENABLE_PERF_STATS",      "Performance Stats",        "Performance statistics overlay",                           true, true, OptionCategory::EditorTools});
+    config.options.push_back({"BUILD_TESTS",            "Unit Tests",               "Build CTest unit test suite",                              true, true, OptionCategory::EditorTools});
 
     // Scripting
-    config.options.push_back({"ENABLE_SCRIPTING",      "AngelScript Scripting",    "AngelScript VM for game scripting",                       true, true, OptionCategory::Scripting});
-    config.options.push_back({"ENABLE_HOT_RELOAD",     "Hot Reload",               "Game module hot-reload during development",               true, true, OptionCategory::Scripting});
+    config.options.push_back({"ENABLE_LUA",             "Lua Scripting",            "Lua scripting support (Sol2 bindings)",                   true, true, OptionCategory::Scripting});
+    config.options.push_back({"ENABLE_HOT_RELOAD",      "Hot Reload",               "Game module hot-reload during development",               true, true, OptionCategory::Scripting});
 
     // Gameplay Systems
-    config.options.push_back({"ENABLE_TERRAIN_SYSTEM", "Terrain System",           "Heightmap terrain with LOD and erosion",                  true, true, OptionCategory::Gameplay});
-    config.options.push_back({"ENABLE_ADVANCED_INPUT", "Advanced Input",           "Extended input: keyboard, mouse, gamepad",                true, true, OptionCategory::Gameplay});
-    config.options.push_back({"ENABLE_ASSET_STREAMING","Asset Streaming",          "Runtime asset streaming and loading",                     true, true, OptionCategory::Gameplay});
-    config.options.push_back({"ENABLE_PROCEDURAL",     "Procedural Generation",    "Noise, erosion, mesh gen, WFC algorithms",                true, true, OptionCategory::Gameplay});
-    config.options.push_back({"ENABLE_CINEMATIC",      "Cinematic Sequencer",      "Cinematic sequence and cutscene system",                  true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_TERRAIN_SYSTEM",  "Terrain System",           "Heightmap terrain with LOD and erosion",                  true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_PROCEDURAL",      "Procedural Generation",    "Noise, erosion, mesh gen, WFC algorithms",                true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_CINEMATIC",       "Cinematic Sequencer",      "Cinematic sequence and cutscene system",                  true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_WEATHER",         "Weather System",           "Dynamic weather system",                                  true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_INVENTORY",       "Inventory System",         "Item inventory management system",                        true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_QUEST_SYSTEM",    "Quest System",             "Quest and objective tracking system",                     true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_EVENT_SYSTEM",    "Event System",             "Publish/subscribe event bus",                             true, true, OptionCategory::Gameplay});
+    config.options.push_back({"ENABLE_DAY_NIGHT",       "Day/Night Cycle",          "Dynamic day/night cycle system",                          true, true, OptionCategory::Gameplay});
+
+    // Shipping & Deployment
+    config.options.push_back({"SPARK_HEADLESS_SUPPORT", "Headless Mode",            "Headless/dedicated server mode support",                  true, true, OptionCategory::Shipping});
+    config.options.push_back({"ENABLE_CONSOLE_IN_SHIPPING",    "Console in Shipping",     "Include SparkConsole in Shipping builds",          false, false, OptionCategory::Shipping});
+    config.options.push_back({"ENABLE_DEVCOMMANDS_IN_SHIPPING","Dev Commands in Shipping","Include dev commands in Shipping builds",          false, false, OptionCategory::Shipping});
+    config.options.push_back({"STRIP_DEBUG_SYMBOLS",    "Strip Debug Symbols",      "Strip debug symbols from binaries",                       false, false, OptionCategory::Shipping});
 
     // Experimental
-    config.options.push_back({"ENABLE_NETWORKING",     "Networking",               "UDP multiplayer, lag compensation (requires curl)",       false, false, OptionCategory::Experimental});
-    config.options.push_back({"ENABLE_SDL2",           "SDL2 Windowing",           "SDL2 cross-platform windowing (Linux primary)",           false, false, OptionCategory::Experimental});
-    config.options.push_back({"ENABLE_COLLABORATIVE",  "Collaborative Editing",    "Collaborative editing features",                          false, false, OptionCategory::Experimental});
+    config.options.push_back({"ENABLE_NETWORKING",      "Networking",               "UDP multiplayer, lag compensation (requires curl)",       false, false, OptionCategory::Experimental});
+    config.options.push_back({"ENABLE_SDL2",            "SDL2 Windowing",           "SDL2 cross-platform windowing and input",                 false, false, OptionCategory::Experimental});
+    config.options.push_back({"ENABLE_COLLABORATIVE",   "Collaborative Editing",    "Collaborative editing features",                          true, true, OptionCategory::Experimental});
 
     // Set platform-appropriate defaults
     config.buildPath = "build";
@@ -154,9 +166,9 @@ void ConfigManager::InitDefaults() {
     config.buildType = BuildType::Release;
 
 #ifdef SPARK_PLATFORM_LINUX
-    // On Linux, enable SDL2 and OpenGL by default
+    // On Linux, enable SDL2 by default (matches engine CMakeLists.txt)
     for (auto& opt : config.options) {
-        if (opt.cmakeVar == "ENABLE_SDL2" || opt.cmakeVar == "ENABLE_OPENGL") {
+        if (opt.cmakeVar == "ENABLE_SDL2") {
             opt.defaultValue = true;
             opt.currentValue = true;
         }
@@ -168,7 +180,7 @@ void ConfigManager::InitDefaults() {
     }
 #elif defined(SPARK_PLATFORM_MACOS)
     for (auto& opt : config.options) {
-        if (opt.cmakeVar == "ENABLE_OPENGL") {
+        if (opt.cmakeVar == "ENABLE_SDL2") {
             opt.defaultValue = true;
             opt.currentValue = true;
         }
@@ -196,11 +208,20 @@ void ConfigManager::ApplyPresetDefaults() {
 }
 
 void ConfigManager::ApplyPresetMinimal() {
-    for (auto& opt : config.options)
-        opt.currentValue = false;
+    // Matches the "minimal" preset from SparkEngine's CMakePresets.json
+    ApplyPresetDefaults();
     for (auto& opt : config.options) {
-        if (opt.cmakeVar == "ENABLE_GRAPHICS" || opt.cmakeVar == "ENABLE_PHYSICS")
-            opt.currentValue = true;
+        if (opt.cmakeVar == "ENABLE_AI" ||
+            opt.cmakeVar == "ENABLE_ANIMATION" ||
+            opt.cmakeVar == "ENABLE_NETWORKING" ||
+            opt.cmakeVar == "ENABLE_SAVE_SYSTEM" ||
+            opt.cmakeVar == "ENABLE_PROCEDURAL" ||
+            opt.cmakeVar == "ENABLE_CINEMATIC" ||
+            opt.cmakeVar == "ENABLE_DECALS" ||
+            opt.cmakeVar == "ENABLE_MESH_LOD" ||
+            opt.cmakeVar == "ENABLE_DXR") {
+            opt.currentValue = false;
+        }
     }
 }
 
@@ -213,6 +234,45 @@ void ConfigManager::ApplyPresetLinuxFriendly() {
             opt.currentValue = false;
     }
     config.generator = Generator::Ninja;
+}
+
+void ConfigManager::ApplyPresetShipping() {
+    // Matches the "shipping" presets from SparkEngine's CMakePresets.json
+    ApplyPresetDefaults();
+    for (auto& opt : config.options) {
+        if (opt.cmakeVar == "ENABLE_EDITOR" ||
+            opt.cmakeVar == "ENABLE_PROFILING" ||
+            opt.cmakeVar == "ENABLE_HOT_RELOAD" ||
+            opt.cmakeVar == "ENABLE_CONSOLE_IN_SHIPPING" ||
+            opt.cmakeVar == "ENABLE_DEVCOMMANDS_IN_SHIPPING" ||
+            opt.cmakeVar == "BUILD_TESTS") {
+            opt.currentValue = false;
+        }
+        if (opt.cmakeVar == "STRIP_DEBUG_SYMBOLS") {
+            opt.currentValue = true;
+        }
+    }
+    config.buildType = BuildType::Release;
+}
+
+void ConfigManager::ApplyPresetDevelopment() {
+    // Full-featured development build with all tools enabled
+    ApplyPresetDefaults();
+    for (auto& opt : config.options) {
+        if (opt.cmakeVar == "ENABLE_EDITOR" ||
+            opt.cmakeVar == "ENABLE_PROFILING" ||
+            opt.cmakeVar == "ENABLE_HOT_RELOAD" ||
+            opt.cmakeVar == "ENABLE_PERF_STATS" ||
+            opt.cmakeVar == "BUILD_TESTS") {
+            opt.currentValue = true;
+        }
+        if (opt.cmakeVar == "STRIP_DEBUG_SYMBOLS" ||
+            opt.cmakeVar == "ENABLE_CONSOLE_IN_SHIPPING" ||
+            opt.cmakeVar == "ENABLE_DEVCOMMANDS_IN_SHIPPING") {
+            opt.currentValue = false;
+        }
+    }
+    config.buildType = BuildType::Debug;
 }
 
 static std::string Trim(const std::string& s) {
