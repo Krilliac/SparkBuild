@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
     if (argc > 1) {
         std::string arg = argv[1];
         if (arg == "--help" || arg == "-h") {
-            std::cout << "SparkBuild - SparkEngine Build Tool v2.0\n\n";
+            std::cout << "SparkBuild - SparkEngine Build Tool v2.1\n\n";
             std::cout << "Usage:\n";
             std::cout << "  sparkbuild              Run interactive TUI\n";
             std::cout << "  sparkbuild --help       Show this help\n";
@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
             return 0;
         }
         if (arg == "--version" || arg == "-v") {
-            std::cout << "SparkBuild v2.0.0 (" SPARK_PLATFORM_NAME ")\n";
+            std::cout << "SparkBuild v2.1.0 (" SPARK_PLATFORM_NAME ")\n";
             return 0;
         }
     }

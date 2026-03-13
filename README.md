@@ -10,8 +10,8 @@ A cross-platform terminal UI build tool for configuring and compiling [SparkEngi
 
 - **Interactive TUI** — Color-coded menus with categorized build options, input validation, and live process output
 - **Cross-platform** — Native support for Windows, Linux, and macOS with platform-specific defaults
-- **30+ toggleable modules** — Enable or disable engine systems individually (graphics, physics, audio, scripting, networking, etc.)
-- **Preset system** — Quickly apply predefined configurations: All On, All Off, Defaults, Minimal, or Linux-Friendly
+- **35+ toggleable modules** — Enable or disable engine systems individually (graphics, physics, scripting, rendering effects, gameplay systems, etc.)
+- **Preset system** — Quickly apply predefined configurations: All On, All Off, Defaults, Minimal, Linux-Friendly, Shipping, or Development
 - **CMakePresets.json support** — Auto-detects and lists available presets from the engine directory
 - **Environment management** — Checks for Git, CMake, and compilers; can clone SparkEngine and download CMake automatically
 - **Configuration persistence** — Saves and restores your settings via an INI file between sessions
@@ -72,7 +72,7 @@ The binary will be at `build/bin/SparkBuild`.
 
 ```
 ╔══════════════════════════════════════╗
-║           SparkBuild v2.0           ║
+║           SparkBuild v2.1           ║
 ╚══════════════════════════════════════╝
   1. Environment
   2. Configure Build
@@ -102,8 +102,8 @@ Customize how SparkEngine is built:
 | Select Generator | Visual Studio 2022, Ninja, Makefiles, Xcode, etc. |
 | Select Build Type | Debug, Release, RelWithDebInfo, MinSizeRel |
 | Set Paths | Engine source path and build output path |
-| Toggle Build Options | Enable/disable 30+ engine modules by category |
-| Apply Preset | All On, All Off, Defaults, Minimal, Linux-Friendly |
+| Toggle Build Options | Enable/disable 35+ engine modules by category |
+| Apply Preset | All On, All Off, Defaults, Minimal, Linux-Friendly, Shipping, Development |
 | CMake Presets | Detect and select from `CMakePresets.json` |
 | MSVC Toolset | Override the MSVC toolset version (Windows only) |
 | Parallel Jobs | Set the number of parallel compilation jobs |
@@ -123,16 +123,17 @@ Execute the actual build operations:
 
 ## Build Options
 
-SparkBuild exposes 30+ CMake options organized into categories:
+SparkBuild exposes 35+ CMake options organized into categories, matching the engine's CMakeLists.txt exactly:
 
 | Category | Options |
 |----------|---------|
-| **Core Systems** | Graphics, Physics (Bullet 3), AI/NavMesh, Animation, ECS (EnTT), Save/Load |
-| **Audio** | 3D Spatial Audio (XAudio2 / miniaudio) |
-| **Graphics** | Vulkan, OpenGL, DirectX Raytracing, Post-processing, Lighting, Decals, Mesh LOD |
-| **Editor & Tools** | ImGui Editor, Profiling, Unit Tests, Debug Console, Shader Compiler |
-| **Scripting** | AngelScript, Hot Reload |
-| **Gameplay** | Terrain, Advanced Input, Asset Streaming, Procedural Generation, Cinematics |
+| **Core Systems** | Graphics, Physics (Bullet 3), AI/NavMesh, Animation, Save/Load, Advanced Input, Asset Streaming |
+| **Graphics Backends** | Vulkan, OpenGL, DirectX Raytracing (DXR) |
+| **Rendering & Effects** | Post-Processing, Advanced Lighting, Decals, Mesh LOD, Fog System, Screen-Space Effects (SSAO/SSR) |
+| **Editor & Tools** | ImGui Editor, Profiling, Performance Stats, Unit Tests |
+| **Scripting** | Lua (Sol2), Hot Reload |
+| **Gameplay** | Terrain, Procedural Generation, Cinematics, Weather, Inventory, Quest System, Event System, Day/Night Cycle |
+| **Shipping & Deployment** | Headless Mode, Console in Shipping, Dev Commands in Shipping, Strip Debug Symbols |
 | **Experimental** | Networking, SDL2, Collaborative Editing |
 
 ### Presets
@@ -142,8 +143,10 @@ SparkBuild exposes 30+ CMake options organized into categories:
 | All On | Enable every module |
 | All Off | Disable everything |
 | Defaults | Recommended defaults for the current platform |
-| Minimal | Core graphics + physics only |
+| Minimal | Defaults with AI, Animation, Networking, Save, Procedural, Cinematic, Decals, Mesh LOD, and DXR disabled |
 | Linux-Friendly | SDL2 + OpenGL for best Linux compatibility |
+| Shipping | Release build with editor, profiling, hot-reload, and tests disabled; strips debug symbols |
+| Development | Debug build with all editor/profiling/testing tools enabled |
 
 ## Configuration File
 
@@ -168,9 +171,8 @@ ParallelJobs=8
 
 [Options]
 ENABLE_GRAPHICS=ON
-ENABLE_PHYSICS=ON
-ENABLE_AUDIO=ON
-ENABLE_SCRIPTING=OFF
+ENABLE_PHYSX=ON
+ENABLE_LUA=ON
 ENABLE_NETWORKING=OFF
 ```
 

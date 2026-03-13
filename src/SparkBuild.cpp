@@ -30,7 +30,7 @@ int SparkBuildApp::Run() {
     Term::EnableColors();
     Term::ClearScreen();
 
-    Term::PrintHeader("SparkBuild - SparkEngine Build Tool v2.0");
+    Term::PrintHeader("SparkBuild - SparkEngine Build Tool v2.1");
     std::cout << Term::Dim("  Platform: " SPARK_PLATFORM_NAME) << "\n";
     std::cout << Term::Dim("  Config:   " + ConfigManager::GetDefaultIniPath()) << "\n\n";
 
@@ -456,9 +456,9 @@ void SparkBuildApp::ShowBuildTypeMenu() {
 
 void SparkBuildApp::ShowOptionsMenu() {
     OptionCategory catOrder[] = {
-        OptionCategory::Core, OptionCategory::Audio, OptionCategory::Graphics,
+        OptionCategory::Core, OptionCategory::Graphics, OptionCategory::Rendering,
         OptionCategory::EditorTools, OptionCategory::Scripting,
-        OptionCategory::Gameplay, OptionCategory::Experimental
+        OptionCategory::Gameplay, OptionCategory::Shipping, OptionCategory::Experimental
     };
 
     bool inMenu = true;
@@ -511,17 +511,21 @@ void SparkBuildApp::ShowPresetsMenu() {
     std::cout << "  " << Term::Bold("1") << "  All On\n";
     std::cout << "  " << Term::Bold("2") << "  All Off\n";
     std::cout << "  " << Term::Bold("3") << "  Defaults\n";
-    std::cout << "  " << Term::Bold("4") << "  Minimal (Graphics + Physics only)\n";
+    std::cout << "  " << Term::Bold("4") << "  Minimal (Disables AI, Animation, Networking, etc.)\n";
     std::cout << "  " << Term::Bold("5") << "  Linux-Friendly (SDL2 + OpenGL)\n";
+    std::cout << "  " << Term::Bold("6") << "  Shipping (Release, no editor/profiling/tests)\n";
+    std::cout << "  " << Term::Bold("7") << "  Development (Debug, all tools enabled)\n";
     std::cout << "  " << Term::Bold("0") << "  Cancel\n\n";
 
-    int choice = Term::ReadInt("> ", 0, 5);
+    int choice = Term::ReadInt("> ", 0, 7);
     switch (choice) {
         case 1: m_config.ApplyPresetAllOn();  std::cout << Term::Green("All options enabled.") << "\n"; break;
         case 2: m_config.ApplyPresetAllOff(); std::cout << Term::Green("All options disabled.") << "\n"; break;
         case 3: m_config.ApplyPresetDefaults(); std::cout << Term::Green("Defaults applied.") << "\n"; break;
         case 4: m_config.ApplyPresetMinimal(); std::cout << Term::Green("Minimal preset applied.") << "\n"; break;
         case 5: m_config.ApplyPresetLinuxFriendly(); std::cout << Term::Green("Linux-friendly preset applied.") << "\n"; break;
+        case 6: m_config.ApplyPresetShipping(); std::cout << Term::Green("Shipping preset applied.") << "\n"; break;
+        case 7: m_config.ApplyPresetDevelopment(); std::cout << Term::Green("Development preset applied.") << "\n"; break;
     }
 }
 
@@ -797,9 +801,9 @@ void SparkBuildApp::ShowConfigSummary() {
     std::cout << "\n  " << Term::Bold(Term::Yellow("Build Options:")) << "\n";
 
     OptionCategory catOrder[] = {
-        OptionCategory::Core, OptionCategory::Audio, OptionCategory::Graphics,
+        OptionCategory::Core, OptionCategory::Graphics, OptionCategory::Rendering,
         OptionCategory::EditorTools, OptionCategory::Scripting,
-        OptionCategory::Gameplay, OptionCategory::Experimental
+        OptionCategory::Gameplay, OptionCategory::Shipping, OptionCategory::Experimental
     };
 
     for (auto cat : catOrder) {
